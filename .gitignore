@@ -45,5 +45,3 @@ logs/
 *.bak
 *_backup/
 
-# Go modules
-go.sum
