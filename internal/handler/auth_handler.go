@@ -109,6 +109,9 @@ func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request")
 	}
+	if req.Email == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Email is required")
+	}
 
 	if err := h.authService.ForgotPassword(req.Email); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
@@ -124,6 +127,12 @@ func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request")
+	}
+	if req.Token == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Reset token is required")
+	}
+	if len(req.NewPassword) < 6 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Password must be at least 6 characters")
 	}
 
 	if err := h.authService.ResetPassword(req.Token, req.NewPassword); err != nil {

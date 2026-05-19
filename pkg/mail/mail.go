@@ -153,7 +153,7 @@ func (s *brevoMailService) SendWelcomeEmail(email, name, token string) error {
 }
 
 func (s *brevoMailService) SendPasswordResetEmail(email, name, token string) error {
-	resetUrl := fmt.Sprintf("%s/reset-password?token=%s", s.appURL, token)
+	resetUrl := fmt.Sprintf("%s/auth/reset-password?token=%s", s.appURL, token)
 	content := fmt.Sprintf(`
             <p>Hi %s,</p>
             <p>You requested to reset your password for the Real Estate Management System.</p>
