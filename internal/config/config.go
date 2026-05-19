@@ -30,7 +30,7 @@ func LoadConfig() (*Config, error) {
 	appURL := os.Getenv("APP_URL")
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost:3000,http://127.0.0.1:3000"
+		allowedOrigins = "http://localhost:3000,https://unified-real-estate-fe.vercel.app"
 		if appURL != "" {
 			allowedOrigins += "," + appURL
 		}
