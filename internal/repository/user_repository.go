@@ -16,6 +16,7 @@ type UserRepository interface {
 	FindByID(id string) (*models.User, error)
 	FindByVerificationToken(token string) (*models.User, error)
 	FindByResetToken(token string) (*models.User, error)
+	FindByRefreshToken(token string) (*models.User, error)
 	FindAllAgents() ([]models.User, error)
 }
 
@@ -84,6 +85,18 @@ func (r *userRepository) FindByVerificationToken(token string) (*models.User, er
 func (r *userRepository) FindByResetToken(token string) (*models.User, error) {
 	var user models.User
 	err := r.db.Preload("Profile").Where("reset_token = ?", token).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepository) FindByRefreshToken(token string) (*models.User, error) {
+	var user models.User
+	err := r.db.Preload("Profile").Where("refresh_token = ?", token).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

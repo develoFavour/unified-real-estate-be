@@ -14,7 +14,8 @@ import (
 
 type AuthService interface {
 	Register(req models.Profile, email, password string, role models.Role, invitationToken string) (*models.User, error)
-	Login(email, password, jwtSecret string) (string, *models.User, error)
+	Login(email, password, jwtSecret string) (string, string, *models.User, error)
+	RefreshToken(refreshToken, jwtSecret string) (string, string, *models.User, error)
 	VerifyEmail(token string) error
 	ForgotPassword(email string) error
 	ResetPassword(token, newPassword string) error
@@ -101,29 +102,75 @@ func (s *authService) Register(profile models.Profile, email, password string, r
 	return user, nil
 }
 
-func (s *authService) Login(email, password, jwtSecret string) (string, *models.User, error) {
+func (s *authService) Login(email, password, jwtSecret string) (string, string, *models.User, error) {
 	user, err := s.repo.FindByEmail(email)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	if user == nil {
-		return "", nil, utils.ErrInvalidCredentials
+		return "", "", nil, utils.ErrInvalidCredentials
 	}
 
 	if !utils.CheckPasswordHash(password, user.PasswordHash) {
-		return "", nil, utils.ErrInvalidCredentials
+		return "", "", nil, utils.ErrInvalidCredentials
 	}
 
 	if user.Status == models.StatusPending {
-		return "", nil, errors.New("account is pending approval")
+		return "", "", nil, errors.New("account is pending approval")
 	}
 
 	jwtToken, err := token.GenerateJWT(user.ID, user.Email, string(user.Role), jwtSecret)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
-	return jwtToken, user, nil
+	refreshToken, err := utils.GenerateRandomToken(32)
+	if err != nil {
+		return "", "", nil, err
+	}
+	refreshExpiry := time.Now().Add(7 * 24 * time.Hour)
+	user.RefreshToken = refreshToken
+	user.RefreshTokenExpiry = &refreshExpiry
+	if err := s.repo.UpdateUser(user); err != nil {
+		return "", "", nil, err
+	}
+
+	return jwtToken, refreshToken, user, nil
+}
+
+func (s *authService) RefreshToken(rToken, jwtSecret string) (string, string, *models.User, error) {
+	if rToken == "" {
+		return "", "", nil, errors.New("refresh token is required")
+	}
+
+	user, err := s.repo.FindByRefreshToken(rToken)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if user == nil || user.RefreshTokenExpiry == nil || time.Now().After(*user.RefreshTokenExpiry) {
+		return "", "", nil, errors.New("invalid or expired refresh token")
+	}
+	if user.Status == models.StatusPending || user.Status == models.StatusSuspended {
+		return "", "", nil, errors.New("account is not active")
+	}
+
+	jwtToken, err := token.GenerateJWT(user.ID, user.Email, string(user.Role), jwtSecret)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	nextRefreshToken, err := utils.GenerateRandomToken(32)
+	if err != nil {
+		return "", "", nil, err
+	}
+	refreshExpiry := time.Now().Add(7 * 24 * time.Hour)
+	user.RefreshToken = nextRefreshToken
+	user.RefreshTokenExpiry = &refreshExpiry
+	if err := s.repo.UpdateUser(user); err != nil {
+		return "", "", nil, err
+	}
+
+	return jwtToken, nextRefreshToken, user, nil
 }
 
 func (s *authService) VerifyEmail(vToken string) error {

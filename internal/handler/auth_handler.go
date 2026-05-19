@@ -153,7 +153,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request payload")
 	}
 
-	token, user, err := h.authService.Login(req.Email, req.Password, h.cfg.JWTSecret)
+	accessToken, refreshToken, user, err := h.authService.Login(req.Email, req.Password, h.cfg.JWTSecret)
 	if err != nil {
 		msg := "Invalid email or password"
 		if err.Error() == "account is pending approval" {
@@ -163,8 +163,29 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Login successful", fiber.Map{
-		"token": token,
-		"user":  user,
+		"token":         accessToken,
+		"refresh_token": refreshToken,
+		"user":          user,
+	})
+}
+
+func (h *AuthHandler) RefreshToken(c *fiber.Ctx) error {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request payload")
+	}
+
+	accessToken, refreshToken, user, err := h.authService.RefreshToken(req.RefreshToken, h.cfg.JWTSecret)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusUnauthorized, err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Token refreshed", fiber.Map{
+		"token":         accessToken,
+		"refresh_token": refreshToken,
+		"user":          user,
 	})
 }
 
