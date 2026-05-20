@@ -52,9 +52,29 @@ func (s *invoiceService) CreateRentInvoiceForLeaseRequest(req *models.LeaseReque
 		return nil, errors.New("lease request property is required")
 	}
 
-	existing, err := s.repo.GetPendingByLeaseRequest(req.ID, models.InvoiceRent)
-	if err == nil && existing != nil {
-		return existing, nil
+	var existing models.Invoice
+	err := s.db.Where(
+		"lease_request_id = ? AND type = ? AND status IN ?",
+		req.ID,
+		models.InvoiceRent,
+		[]models.InvoiceStatus{models.InvoicePending, models.InvoiceOverdue, models.InvoicePaid},
+	).Order("created_at DESC").First(&existing).Error
+	if err == nil {
+		return s.repo.GetByID(existing.ID.String())
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = s.db.Where(
+		"tenant_id = ? AND property_id = ? AND type = ? AND status IN ? AND billing_period_start IS NULL",
+		req.TenantID,
+		req.PropertyID,
+		models.InvoiceRent,
+		[]models.InvoiceStatus{models.InvoicePending, models.InvoiceOverdue, models.InvoicePaid},
+	).Order("created_at DESC").First(&existing).Error
+	if err == nil {
+		return s.repo.GetByID(existing.ID.String())
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -152,6 +172,10 @@ func (s *invoiceService) CreateManualInvoice(requesterID string, input CreateMan
 
 	tenantUUID, _ := uuid.Parse(tenantID)
 	propertyUUID, _ := uuid.Parse(propertyID)
+	if err := s.validateManualInvoiceAllowed(invoiceType, tenantUUID, propertyUUID, leaseID); err != nil {
+		return nil, err
+	}
+
 	dueDate := time.Now().AddDate(0, 0, 7)
 	if input.DueDate != nil {
 		dueDate = *input.DueDate
@@ -177,6 +201,48 @@ func (s *invoiceService) CreateManualInvoice(requesterID string, input CreateMan
 
 	s.sendNotification(tenantUUID, "New invoice issued", fmt.Sprintf("%s for %s is due on %s.", invoiceType, property.Title, dueDate.Format("Jan 2, 2006")))
 	return s.repo.GetByID(invoice.ID.String())
+}
+
+func (s *invoiceService) validateManualInvoiceAllowed(invoiceType models.InvoiceType, tenantID, propertyID uuid.UUID, leaseID *uuid.UUID) error {
+	if invoiceType == models.InvoiceRent {
+		return errors.New("rent invoices are created automatically after lease approval or by the renewal billing cycle")
+	}
+
+	if !isMoveInInvoiceType(invoiceType) {
+		return nil
+	}
+
+	query := s.db.Model(&models.Invoice{}).
+		Where("tenant_id = ? AND property_id = ? AND type = ? AND status IN ?",
+			tenantID,
+			propertyID,
+			invoiceType,
+			[]models.InvoiceStatus{models.InvoicePending, models.InvoiceOverdue, models.InvoicePaid},
+		)
+	if leaseID != nil {
+		query = query.Where("lease_id = ? OR lease_id IS NULL", *leaseID)
+	}
+
+	var existingCount int64
+	if err := query.Count(&existingCount).Error; err != nil {
+		return err
+	}
+	if existingCount > 0 {
+		return fmt.Errorf("%s invoice already exists for this tenant and property", invoiceType)
+	}
+
+	return nil
+}
+
+func isMoveInInvoiceType(invoiceType models.InvoiceType) bool {
+	switch invoiceType {
+	case models.InvoiceCautionDeposit,
+		models.InvoiceAgencyFee,
+		models.InvoiceLegalFee:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *invoiceService) RunBillingCycle() (BillingCycleResult, error) {

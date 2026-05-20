@@ -567,6 +567,14 @@ func (s *walletService) PayInvoice(userID uuid.UUID, invoiceID uuid.UUID, pin st
 			if err := s.preventCrossPropertyRentPayment(tx, invoice.TenantID, invoice.PropertyID); err != nil {
 				return err
 			}
+			if err := s.preventDuplicateRentInvoicePayment(tx, invoice); err != nil {
+				return err
+			}
+		}
+		if isStartupInvoiceType(invoice.Type) {
+			if err := s.preventDuplicateStartupInvoicePayment(tx, invoice); err != nil {
+				return err
+			}
 		}
 		if wallet.Balance < invoice.Amount {
 			return errors.New("insufficient wallet balance for invoice")
@@ -630,6 +638,63 @@ func (s *walletService) PayInvoice(userID uuid.UUID, invoiceID uuid.UUID, pin st
 
 	s.notifyRentPaymentConfirmed(userID, invoiceID)
 	return nil
+}
+
+func (s *walletService) preventDuplicateRentInvoicePayment(tx *gorm.DB, invoice models.Invoice) error {
+	if invoice.BillingPeriodStart != nil || invoice.BillingPeriodEnd != nil {
+		return nil
+	}
+
+	var paidCount int64
+	if err := tx.Model(&models.Invoice{}).
+		Where(
+			"id <> ? AND tenant_id = ? AND property_id = ? AND type = ? AND status = ? AND billing_period_start IS NULL",
+			invoice.ID,
+			invoice.TenantID,
+			invoice.PropertyID,
+			models.InvoiceRent,
+			models.InvoicePaid,
+		).
+		Count(&paidCount).Error; err != nil {
+		return err
+	}
+	if paidCount > 0 {
+		return errors.New("the move-in rent for this property has already been paid")
+	}
+
+	return nil
+}
+
+func (s *walletService) preventDuplicateStartupInvoicePayment(tx *gorm.DB, invoice models.Invoice) error {
+	var paidCount int64
+	if err := tx.Model(&models.Invoice{}).
+		Where(
+			"id <> ? AND tenant_id = ? AND property_id = ? AND type = ? AND status = ?",
+			invoice.ID,
+			invoice.TenantID,
+			invoice.PropertyID,
+			invoice.Type,
+			models.InvoicePaid,
+		).
+		Count(&paidCount).Error; err != nil {
+		return err
+	}
+	if paidCount > 0 {
+		return errors.New("this startup invoice has already been paid for this property")
+	}
+
+	return nil
+}
+
+func isStartupInvoiceType(invoiceType models.InvoiceType) bool {
+	switch invoiceType {
+	case models.InvoiceCautionDeposit,
+		models.InvoiceAgencyFee,
+		models.InvoiceLegalFee:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *walletService) preventCrossPropertyRentPayment(tx *gorm.DB, tenantID, propertyID uuid.UUID) error {
