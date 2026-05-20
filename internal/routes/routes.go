@@ -66,6 +66,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB, cfg *config.Config) {
 	leaseRequestHandler := handler.NewLeaseRequestHandler(leaseRequestService)
 	invoiceHandler := handler.NewInvoiceHandler(invoiceService)
 	riskWorkflowHandler := handler.NewRiskWorkflowHandler(riskWorkflowService)
+	adminHandler := handler.NewAdminHandler(db)
 
 	api := app.Group("/api/v1")
 
@@ -89,6 +90,21 @@ func SetupRoutes(app *fiber.App, db *gorm.DB, cfg *config.Config) {
 	auth.Put("/update-profile", middleware.RequireAuth(cfg.JWTSecret), authHandler.UpdateProfile)
 	auth.Get("/invitation/:token", authHandler.ValidateInvitation)
 	auth.Get("/agents/verified", middleware.RequireAuth(cfg.JWTSecret), authHandler.GetVerifiedAgents)
+
+	// Admin Routes
+	admin := api.Group("/admin")
+	admin.Use(middleware.RequireAuth(cfg.JWTSecret))
+	admin.Use(middleware.RequireRole(string(models.RoleSuperAdmin)))
+	admin.Get("/summary", adminHandler.GetSummary)
+	admin.Get("/users", adminHandler.ListUsers)
+	admin.Get("/users/pending-agents", adminHandler.GetPendingAgents)
+	admin.Patch("/users/:id/status", adminHandler.UpdateUserStatus)
+	admin.Get("/properties", adminHandler.ListProperties)
+	admin.Patch("/properties/:id/moderation", adminHandler.UpdatePropertyModeration)
+	admin.Get("/payments", adminHandler.ListPaymentLedger)
+	admin.Get("/leases", adminHandler.ListLeaseWorkflow)
+	admin.Get("/sales", adminHandler.ListSaleWorkflow)
+	admin.Get("/disputes", adminHandler.ListDisputes)
 
 	// Property Routes
 	props := api.Group("/properties")

@@ -39,7 +39,7 @@ type Invoice struct {
 	PaidAt             *time.Time     `json:"paid_at"`
 	PaymentReference   string         `gorm:"type:varchar(100);index" json:"payment_reference"`
 	Description        string         `gorm:"type:text" json:"description"`
-	CreatedAt          time.Time      `json:"created_at"`
+	CreatedAt          time.Time      `gorm:"index" json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
 

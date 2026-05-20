@@ -57,7 +57,7 @@ type Property struct {
 	Images                []PropertyImage `gorm:"foreignKey:PropertyID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"images"`
 	Owner                 *User           `gorm:"foreignKey:OwnerID" json:"owner"`
 	Agent                 *User           `gorm:"foreignKey:AgentID" json:"agent"`
-	CreatedAt             time.Time       `json:"created_at"`
+	CreatedAt             time.Time       `gorm:"index" json:"created_at"`
 	UpdatedAt             time.Time       `json:"updated_at"`
 	DeletedAt             gorm.DeletedAt  `gorm:"index" json:"-"`
 }

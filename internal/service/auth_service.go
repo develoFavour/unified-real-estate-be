@@ -16,7 +16,7 @@ type AuthService interface {
 	Register(req models.Profile, email, password string, role models.Role, invitationToken string) (*models.User, error)
 	Login(email, password, jwtSecret string) (string, string, *models.User, error)
 	RefreshToken(refreshToken, jwtSecret string) (string, string, *models.User, error)
-	VerifyEmail(token string) error
+	VerifyEmail(token string) (*models.User, error)
 	ForgotPassword(email string) error
 	ResetPassword(token, newPassword string) error
 	GetUserByID(id string) (*models.User, error)
@@ -173,20 +173,24 @@ func (s *authService) RefreshToken(rToken, jwtSecret string) (string, string, *m
 	return jwtToken, nextRefreshToken, user, nil
 }
 
-func (s *authService) VerifyEmail(vToken string) error {
+func (s *authService) VerifyEmail(vToken string) (*models.User, error) {
 	user, err := s.repo.FindByVerificationToken(vToken)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if user == nil {
-		return errors.New("invalid or expired verification token")
+		return nil, errors.New("invalid or expired verification token")
 	}
 
 	user.VerificationToken = ""
 	// Status remains pending for agents until admin approves, but we can track verification separately if needed.
 	// For now, let's assume verification is part of the process.
 
-	return s.repo.UpdateUser(user)
+	if err := s.repo.UpdateUser(user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (s *authService) ForgotPassword(email string) error {

@@ -74,11 +74,12 @@ func (h *AuthHandler) VerifyEmail(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Token is required")
 	}
 
-	if err := h.authService.VerifyEmail(req.Token); err != nil {
+	user, err := h.authService.VerifyEmail(req.Token)
+	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, "Email verified successfully", nil)
+	return utils.SuccessResponse(c, fiber.StatusOK, "Email verified successfully", user)
 }
 
 func (h *AuthHandler) GetMe(c *fiber.Ctx) error {

@@ -25,8 +25,8 @@ type LeaseAgreement struct {
 	RentAmount     float64        `gorm:"type:numeric(12,2);not null" json:"rent_amount"`
 	DocumentURL    string         `gorm:"type:varchar(255)" json:"document_url"`
 	TenantAccepted bool           `gorm:"default:false" json:"tenant_accepted"`
-	Status         LeaseStatus    `gorm:"type:varchar(20);default:'PENDING'" json:"status"`
-	CreatedAt      time.Time      `json:"created_at"`
+	Status         LeaseStatus    `gorm:"type:varchar(20);default:'PENDING';index:idx_leases_status_created,priority:1" json:"status"`
+	CreatedAt      time.Time      `gorm:"index;index:idx_leases_status_created,priority:2" json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 

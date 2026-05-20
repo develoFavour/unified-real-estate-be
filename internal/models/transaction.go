@@ -10,10 +10,10 @@ type PropertyPaymentType string
 type PropertyPaymentStatus string
 
 const (
-	PayHoldingFee   PropertyPaymentType = "HOLDING_FEE"
-	PayFullPayment  PropertyPaymentType = "FULL_PAYMENT"
-	PayRent         PropertyPaymentType = "RENT"
-	PayMilestone    PropertyPaymentType = "MILESTONE"
+	PayHoldingFee  PropertyPaymentType = "HOLDING_FEE"
+	PayFullPayment PropertyPaymentType = "FULL_PAYMENT"
+	PayRent        PropertyPaymentType = "RENT"
+	PayMilestone   PropertyPaymentType = "MILESTONE"
 
 	PayStatusPending   PropertyPaymentStatus = "PENDING"
 	PayStatusEscrow    PropertyPaymentStatus = "ESCROW"
@@ -26,12 +26,12 @@ type PropertyTransaction struct {
 	BuyerID     uuid.UUID             `gorm:"type:uuid;index;not null" json:"buyer_id"`
 	PropertyID  uuid.UUID             `gorm:"type:uuid;index;not null" json:"property_id"`
 	Amount      float64               `gorm:"type:numeric(12,2);not null" json:"amount"`
-	Type        PropertyPaymentType   `gorm:"type:varchar(20);not null" json:"type"`
-	Status      PropertyPaymentStatus `gorm:"type:varchar(20);default:'PENDING'" json:"status"`
-	Reference   string        `gorm:"type:varchar(100);uniqueIndex" json:"reference"`
-	EscrowUntil *time.Time    `json:"escrow_until"`
-	CreatedAt   time.Time     `json:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at"`
+	Type        PropertyPaymentType   `gorm:"type:varchar(20);not null;index:idx_property_transactions_type_status_created,priority:1" json:"type"`
+	Status      PropertyPaymentStatus `gorm:"type:varchar(20);default:'PENDING';index:idx_property_transactions_type_status_created,priority:2" json:"status"`
+	Reference   string                `gorm:"type:varchar(100);uniqueIndex" json:"reference"`
+	EscrowUntil *time.Time            `json:"escrow_until"`
+	CreatedAt   time.Time             `gorm:"index;index:idx_property_transactions_type_status_created,priority:3" json:"created_at"`
+	UpdatedAt   time.Time             `json:"updated_at"`
 
 	Buyer    *User     `gorm:"foreignKey:BuyerID" json:"buyer,omitempty"`
 	Property *Property `gorm:"foreignKey:PropertyID" json:"property,omitempty"`

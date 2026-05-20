@@ -62,8 +62,14 @@ type OpenDisputeInput struct {
 	InvoiceID           string `json:"invoice_id"`
 	SaleReservationID   string `json:"sale_reservation_id"`
 	WalletTransactionID string `json:"wallet_transaction_id"`
+	ReportedUserID      string `json:"reported_user_id"`
+	CaseType            string `json:"case_type"`
+	Category            string `json:"category"`
+	Title               string `json:"title"`
+	Priority            string `json:"priority"`
 	Reason              string `json:"reason"`
 	Description         string `json:"description"`
+	EvidenceURL         string `json:"evidence_url"`
 }
 
 type ResolveDisputeInput struct {
@@ -469,15 +475,44 @@ func (s *riskWorkflowService) OpenDispute(userID string, input OpenDisputeInput)
 	if err != nil {
 		return nil, errors.New("invalid user ID")
 	}
-	if input.Reason == "" || input.Description == "" {
-		return nil, errors.New("reason and description are required")
+	if input.Description == "" {
+		return nil, errors.New("description is required")
+	}
+	caseType := normalizeCaseType(input.CaseType)
+	category := normalizeCaseCategory(input.Category)
+	priority := normalizeCasePriority(input.Priority)
+	title := input.Title
+	if title == "" {
+		title = input.Reason
+	}
+	if title == "" {
+		title = category
+	}
+	reason := input.Reason
+	if reason == "" {
+		reason = title
 	}
 
 	dispute := &models.Dispute{
 		OpenedByID:  openedByID,
-		Reason:      input.Reason,
+		CaseType:    caseType,
+		Category:    category,
+		Title:       title,
+		Priority:    priority,
+		Reason:      reason,
 		Description: input.Description,
+		EvidenceURL: input.EvidenceURL,
 		Status:      models.DisputeOpen,
+	}
+
+	if input.ReportedUserID != "" {
+		reportedUserID, err := uuid.Parse(input.ReportedUserID)
+		if err != nil {
+			return nil, errors.New("invalid reported user ID")
+		}
+		dispute.ReportedUserID = &reportedUserID
+		dispute.RespondentID = &reportedUserID
+		dispute.CaseType = models.CaseTypeDispute
 	}
 
 	if input.SaleReservationID != "" {
@@ -514,9 +549,29 @@ func (s *riskWorkflowService) OpenDispute(userID string, input OpenDisputeInput)
 		if err != nil {
 			return nil, errors.New("invalid property ID")
 		}
-		dispute.PropertyID = &propertyID
+		var property models.Property
+		if err := s.db.Where("id = ?", propertyID).First(&property).Error; err != nil {
+			return nil, err
+		}
+		dispute.PropertyID = &property.ID
+		if category == "REPORT_AGENT" && property.AgentID != nil && *property.AgentID != openedByID && dispute.RespondentID == nil {
+			dispute.RespondentID = property.AgentID
+			dispute.ReportedUserID = property.AgentID
+		}
+		if category == "REPORT_OWNER" && property.OwnerID != nil && *property.OwnerID != openedByID && dispute.RespondentID == nil {
+			dispute.RespondentID = property.OwnerID
+			dispute.ReportedUserID = property.OwnerID
+		}
+		if property.OwnerID != nil && *property.OwnerID != openedByID && dispute.RespondentID == nil {
+			dispute.RespondentID = property.OwnerID
+		}
+		if property.AgentID != nil && *property.AgentID != openedByID && dispute.RespondentID == nil {
+			dispute.RespondentID = property.AgentID
+		}
 	} else {
-		return nil, errors.New("dispute must be linked to a reservation, invoice, transaction, or property")
+		if dispute.CaseType == models.CaseTypeDispute && dispute.RespondentID == nil {
+			return nil, errors.New("formal disputes must be linked to a reservation, invoice, transaction, property, or reported user")
+		}
 	}
 
 	if err := s.db.Create(dispute).Error; err != nil {
@@ -525,7 +580,12 @@ func (s *riskWorkflowService) OpenDispute(userID string, input OpenDisputeInput)
 	if dispute.RespondentID != nil {
 		s.notify(*dispute.RespondentID, "Dispute opened", "A dispute has been opened and needs your response.")
 	}
-	s.audit(&openedByID, "DISPUTE", dispute.ID, "DISPUTE_OPENED", map[string]any{"reason": dispute.Reason})
+	s.audit(&openedByID, "DISPUTE", dispute.ID, "DISPUTE_OPENED", map[string]any{
+		"reason":    dispute.Reason,
+		"case_type": dispute.CaseType,
+		"category":  dispute.Category,
+		"priority":  dispute.Priority,
+	})
 	return dispute, nil
 }
 
@@ -534,8 +594,8 @@ func (s *riskWorkflowService) GetMyDisputes(userID string) ([]models.Dispute, er
 		return nil, errors.New("invalid user ID")
 	}
 	var disputes []models.Dispute
-	err := s.db.Preload("Property").Preload("Invoice").Preload("SaleReservation").
-		Where("opened_by_id = ? OR respondent_id = ?", userID, userID).
+	err := s.db.Preload("Property").Preload("Invoice").Preload("SaleReservation").Preload("ReportedUser.Profile").Preload("Respondent.Profile").
+		Where("opened_by_id = ? OR respondent_id = ? OR reported_user_id = ?", userID, userID, userID).
 		Order("created_at DESC").
 		Find(&disputes).Error
 	return disputes, err
@@ -860,6 +920,31 @@ func parseDocumentType(value string) (models.TransactionDocumentType, error) {
 		return models.TransactionDocumentType(value), nil
 	default:
 		return "", errors.New("unsupported document type")
+	}
+}
+
+func normalizeCaseType(value string) models.CaseType {
+	switch models.CaseType(value) {
+	case models.CaseTypeSupport, models.CaseTypeDispute:
+		return models.CaseType(value)
+	default:
+		return models.CaseTypeSupport
+	}
+}
+
+func normalizeCaseCategory(value string) string {
+	if value == "" {
+		return "GENERAL_SUPPORT"
+	}
+	return value
+}
+
+func normalizeCasePriority(value string) models.CasePriority {
+	switch models.CasePriority(value) {
+	case models.CasePriorityLow, models.CasePriorityMedium, models.CasePriorityHigh, models.CasePriorityUrgent:
+		return models.CasePriority(value)
+	default:
+		return models.CasePriorityMedium
 	}
 }
 

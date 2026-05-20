@@ -29,8 +29,8 @@ type User struct {
 	ID                 uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	Email              string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
 	PasswordHash       string         `gorm:"not null" json:"-"`
-	Role               Role           `gorm:"type:varchar(20);not null;default:'TENANT'" json:"role"`
-	Status             UserStatus     `gorm:"type:varchar(20);not null;default:'ACTIVE'" json:"status"`
+	Role               Role           `gorm:"type:varchar(20);not null;default:'TENANT';index:idx_users_role_status,priority:1" json:"role"`
+	Status             UserStatus     `gorm:"type:varchar(20);not null;default:'ACTIVE';index:idx_users_role_status,priority:2" json:"status"`
 	VerificationToken  string         `gorm:"type:varchar(100)" json:"-"`
 	ResetToken         string         `gorm:"type:varchar(100)" json:"-"`
 	TokenExpiry        *time.Time     `json:"-"`
@@ -38,7 +38,7 @@ type User struct {
 	RefreshTokenExpiry *time.Time     `json:"-"`
 	Profile            Profile        `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"profile"`
 	Wallet             Wallet         `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"wallet"`
-	CreatedAt          time.Time      `json:"created_at"`
+	CreatedAt          time.Time      `gorm:"index" json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
 }

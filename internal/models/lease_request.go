@@ -24,7 +24,7 @@ type LeaseRequest struct {
 	Message    string             `gorm:"type:text" json:"message"`
 	Status     LeaseRequestStatus `gorm:"type:varchar(20);default:'PENDING';index" json:"status"`
 	ReviewedAt *time.Time         `json:"reviewed_at"`
-	CreatedAt  time.Time          `json:"created_at"`
+	CreatedAt  time.Time          `gorm:"index" json:"created_at"`
 	UpdatedAt  time.Time          `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt     `gorm:"index" json:"-"`
 

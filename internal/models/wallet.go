@@ -44,12 +44,12 @@ type WalletTransaction struct {
 	ID          uuid.UUID         `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	WalletID    uuid.UUID         `gorm:"type:uuid;index;not null" json:"wallet_id"`
 	Amount      float64           `gorm:"type:numeric(12,2);not null" json:"amount"`
-	Type        TransactionType   `gorm:"type:varchar(20);not null" json:"type"`
-	Status      TransactionStatus `gorm:"type:varchar(20);default:'PENDING'" json:"status"`
+	Type        TransactionType   `gorm:"type:varchar(20);not null;index:idx_wallet_transactions_type_status_created,priority:1" json:"type"`
+	Status      TransactionStatus `gorm:"type:varchar(20);default:'PENDING';index:idx_wallet_transactions_type_status_created,priority:2" json:"status"`
 	Reference   string            `gorm:"type:varchar(100);uniqueIndex" json:"reference"`
 	Description string            `gorm:"type:text" json:"description"`
 	MetaData    string            `gorm:"type:text" json:"meta_data"` // JSON string for extra info
-	CreatedAt   time.Time         `json:"created_at"`
+	CreatedAt   time.Time         `gorm:"index;index:idx_wallet_transactions_type_status_created,priority:3" json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 
 	Wallet *Wallet `gorm:"foreignKey:WalletID" json:"wallet,omitempty"`
